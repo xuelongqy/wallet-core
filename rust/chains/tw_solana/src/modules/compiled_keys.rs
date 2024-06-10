@@ -7,8 +7,8 @@
 use crate::address::SolanaAddress;
 use crate::instruction::Instruction;
 use crate::transaction::MessageHeader;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use hashbrown::hash_map::Entry;
+use hashbrown::HashMap;
 use tw_coin_entry::error::prelude::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]

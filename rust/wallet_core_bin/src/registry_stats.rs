@@ -4,7 +4,7 @@
 
 use crate::Error;
 use serde_json::Value as Json;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use tw_coin_registry::blockchain_type::BlockchainType;
 use tw_coin_registry::registry;
 

@@ -15,6 +15,7 @@ tw_memory = { path = "../tw_memory" }
 tw_misc = { path = "../tw_misc" }
 tw_proto = { path = "../tw_proto" }
 tw_keypair = { path = "../tw_keypair" }
+hashbrown = "0.14.5"
 
 [dev-dependencies]
 wallet-core-rs = { path = "../wallet_core_rs" }

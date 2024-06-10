@@ -28,6 +28,7 @@ tw_ronin = { path = "../chains/tw_ronin" }
 tw_solana = { path = "../chains/tw_solana" }
 tw_sui = { path = "../chains/tw_sui" }
 tw_thorchain = { path = "../chains/tw_thorchain" }
+hashbrown = { version = '0.14.5', features = ["serde"] }
 
 [build-dependencies]
 itertools = "0.10.5"

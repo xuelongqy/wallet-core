@@ -2,8 +2,8 @@
 #
 # Copyright © 2017 Trust Wallet.
 
-file(GLOB wasm_sources src/*.cpp src/generated/*.cpp)
-file(GLOB wasm_headers src/*.h src/generated/*.h)
+file(GLOB wasm_sources ../src/interface/*.cpp src/RandomStandard.cpp)
+file(GLOB wasm_headers ../include/TrustWalletCore/*.h)
 set(TARGET_NAME wallet-core)
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
 add_executable(${TARGET_NAME} ${wasm_sources} ${wasm_headers})
@@ -35,8 +35,8 @@ set_target_properties(${TARGET_NAME}
 # --no-entry: Skip main entry point because it's built as a library.
 # --closure 1: Enable Emscripten closure compiler to minimize generated JavaScript code size.
 
-set_target_properties(${TARGET_NAME} 
-        PROPERTIES 
+set_target_properties(${TARGET_NAME}
+        PROPERTIES
         COMPILE_FLAGS "-O2 -sSTRICT -sUSE_BOOST_HEADERS=1"
-        LINK_FLAGS "--bind --no-entry --closure 1 -O2 -sSTRICT -sASSERTIONS -sMODULARIZE=1 -sALLOW_MEMORY_GROWTH=1 -sDYNAMIC_EXECUTION=0 -s EXPORTED_FUNCTIONS=['_setThrew']"
+        LINK_FLAGS "--no-entry -O2 -sSTRICT -sASSERTIONS -sSTANDALONE_WASM -sMODULARIZE=1 -sALLOW_MEMORY_GROWTH=1 -sDYNAMIC_EXECUTION=0 -s EXPORTED_FUNCTIONS=['_setThrew','_malloc','_free','_TWTHORChainSwapBuildSwap']"
 )

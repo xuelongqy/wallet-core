@@ -157,8 +157,8 @@ enums:
     as_string: neutron
 functions:
 - name: stringForHRP
-  is_public: false
-  is_static: false
+  is_public: true
+  is_static: true
   params:
   - name: hrp
     type:
@@ -173,8 +173,8 @@ functions:
     is_nullable: true
     is_pointer: true
 - name: hrpForString
-  is_public: false
-  is_static: false
+  is_public: true
+  is_static: true
   params:
   - name: string
     type:

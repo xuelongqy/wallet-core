@@ -15,7 +15,7 @@ use crate::evm_context::EvmContext;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use tw_encoding::hex::as_hex;

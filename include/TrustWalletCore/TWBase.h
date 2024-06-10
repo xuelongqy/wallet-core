@@ -2,6 +2,8 @@
 //
 // Copyright © 2017 Trust Wallet.
 
+#include <emscripten/em_macros.h>
+
 #if !defined(TW_EXTERN_C_BEGIN)
 #if defined(__cplusplus)
 #define TW_EXTERN_C_BEGIN extern "C" {
@@ -13,7 +15,7 @@
 #endif
 
 // Marker for default visibility
-#define TW_VISIBILITY_DEFAULT __attribute__((visibility("default")))
+#define TW_VISIBILITY_DEFAULT EMSCRIPTEN_KEEPALIVE
 
 // Marker for exported classes
 #define TW_EXPORT_CLASS
@@ -25,19 +27,19 @@
 #define TW_EXPORT_ENUM(type)
 
 // Marker for exported functions
-#define TW_EXPORT_FUNC extern
+#define TW_EXPORT_FUNC EMSCRIPTEN_KEEPALIVE
 
 // Marker for exported methods
-#define TW_EXPORT_METHOD extern
+#define TW_EXPORT_METHOD EMSCRIPTEN_KEEPALIVE
 
 // Marker for exported properties
-#define TW_EXPORT_PROPERTY extern
+#define TW_EXPORT_PROPERTY EMSCRIPTEN_KEEPALIVE
 
 // Marker for exported static methods
-#define TW_EXPORT_STATIC_METHOD extern
+#define TW_EXPORT_STATIC_METHOD EMSCRIPTEN_KEEPALIVE
 
 // Marker for exported static properties
-#define TW_EXPORT_STATIC_PROPERTY extern
+#define TW_EXPORT_STATIC_PROPERTY EMSCRIPTEN_KEEPALIVE
 
 // Marker for discardable result (static) method
 #define TW_METHOD_DISCARDABLE_RESULT

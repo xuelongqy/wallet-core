@@ -5,8 +5,8 @@
 use crate::{EncodingError, EncodingResult};
 use data_encoding::{Encoding, Specification};
 use std::cell::RefCell;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use hashbrown::hash_map::Entry;
+use hashbrown::HashMap;
 
 /// cbindgen:ignore
 const ALPHABET_RFC4648: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

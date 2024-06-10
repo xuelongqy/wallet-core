@@ -254,7 +254,7 @@ fn encode_custom(
 
 mod encode_custom_type {
     use super::*;
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
 
     pub(super) fn type_hash(
         data_type: &str,

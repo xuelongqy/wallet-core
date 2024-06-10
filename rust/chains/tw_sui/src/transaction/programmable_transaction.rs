@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use tw_coin_entry::error::prelude::*;
 use tw_encoding::bcs;
 
+type NoStdIndexMap<K, V> = IndexMap<K, V, hashbrown::hash_map::DefaultHashBuilder>;
+
 /// A series of commands where the results of one command can be used in future
 /// commands
 #[derive(Debug, Deserialize, Serialize)]
@@ -32,7 +34,7 @@ enum BuilderArg {
 
 #[derive(Default)]
 pub struct ProgrammableTransactionBuilder {
-    inputs: IndexMap<BuilderArg, CallArg>,
+    inputs: NoStdIndexMap<BuilderArg, CallArg>,
     commands: Vec<Command>,
 }
 
@@ -225,7 +227,7 @@ impl ProgrammableTransactionBuilder {
 
         // collect recipients in the case where they are non-unique in order
         // to minimize the number of transfers that must be performed
-        let mut recipient_map: IndexMap<SuiAddress, Vec<usize>> = IndexMap::new();
+        let mut recipient_map: NoStdIndexMap<SuiAddress, Vec<usize>> = NoStdIndexMap::default();
         let mut amt_args = vec![];
         for (i, (recipient, amount)) in recipients.into_iter().zip(amounts).enumerate() {
             recipient_map.entry(recipient).or_default().push(i);

@@ -7,7 +7,7 @@ use crate::coin_type::CoinType;
 use crate::error::{RegistryError, RegistryResult};
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_hash::hasher::Hasher;
 use tw_keypair::tw::PublicKeyType;
 

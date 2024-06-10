@@ -2,7 +2,7 @@ use crate::{BitcoinEntry, Error, Result};
 use bitcoin::key::{TapTweak, TweakedKeyPair};
 use bitcoin::sighash::{EcdsaSighashType, TapSighashType};
 use secp256k1::{KeyPair, Message, Secp256k1};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::coin_context::CoinContext;
 use tw_coin_entry::coin_entry::{PrivateKeyBytes, SignatureBytes};
 use tw_misc::traits::ToBytesVec;

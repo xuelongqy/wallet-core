@@ -7,3 +7,4 @@ edition = "2021"
 serde = "1.0"
 serde_json = "1.0"
 tw_coin_registry = { path = "../tw_coin_registry" }
+hashbrown = "0.14"

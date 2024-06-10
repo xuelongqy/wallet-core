@@ -14,3 +14,4 @@ tw_hash = { path = "../../tw_hash" }
 tw_keypair = { path = "../../tw_keypair" }
 tw_memory = { path = "../../tw_memory" }
 tw_proto = { path = "../../tw_proto" }
+hashbrown = "0.14.5"

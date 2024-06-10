@@ -3,7 +3,7 @@
 // Copyright © 2017 Trust Wallet.
 
 use crate::address::SolanaAddress;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_keypair::ed25519;
 
 pub mod compiled_instructions;

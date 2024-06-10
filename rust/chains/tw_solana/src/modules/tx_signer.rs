@@ -5,7 +5,7 @@
 use crate::address::SolanaAddress;
 use crate::modules::PubkeySignatureMap;
 use crate::transaction::{versioned, Signature};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::error::prelude::*;
 use tw_keypair::ed25519;
 use tw_keypair::traits::{KeyPairTrait, SigningKeyTrait};

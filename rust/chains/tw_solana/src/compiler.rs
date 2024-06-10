@@ -8,7 +8,7 @@ use crate::modules::proto_builder::ProtoBuilder;
 use crate::modules::tx_signer::TxSigner;
 use crate::SOLANA_ALPHABET;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::coin_context::CoinContext;
 use tw_coin_entry::coin_entry::{PublicKeyBytes, SignatureBytes};
 use tw_coin_entry::error::prelude::*;

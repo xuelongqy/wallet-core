@@ -3,8 +3,8 @@
 // Copyright © 2017 Trust Wallet.
 
 use crate::message::eip712::property::{Property, PropertyType};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use hashbrown::hash_map::Entry;
+use hashbrown::HashMap;
 
 pub type CustomTypes = HashMap<String, Vec<Property>>;
 

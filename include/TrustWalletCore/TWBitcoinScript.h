@@ -36,6 +36,7 @@ struct TWBitcoinScript* _Nonnull TWBitcoinScriptCreateWithData(TWData* _Nonnull 
 /// \param size The size of the buffer
 /// \note Must be deleted with \TWBitcoinScriptDelete
 /// \return A pointer to the script
+TW_EXPORT_STATIC_METHOD
 struct TWBitcoinScript* _Nonnull TWBitcoinScriptCreateWithBytes(uint8_t* _Nonnull bytes, size_t size);
 
 /// Creates a script by copying an existing script.
