@@ -18,7 +18,7 @@ struct TWAnySigner;
 /// \param input The serialized data of a signing input (e.g. TW.Bitcoin.Proto.SigningInput).
 /// \param coin The given coin type to sign the transaction for.
 /// \return The serialized data of a `SigningOutput` proto object. (e.g. TW.Bitcoin.Proto.SigningOutput).
-TW_EXPORT_FUNC TWData *_Nonnull TWAnySignerSign(TWData *_Nonnull input, enum TWCoinType coin);
+extern TWData *_Nonnull TWAnySignerSign(TWData *_Nonnull input, enum TWCoinType coin);
 
 /// Signs a transaction specified by the JSON representation of signing input, coin type and a private key, returning the JSON representation of the signing output.
 ///
@@ -26,19 +26,19 @@ TW_EXPORT_FUNC TWData *_Nonnull TWAnySignerSign(TWData *_Nonnull input, enum TWC
 /// \param key The private key to sign with.
 /// \param coin The given coin type to sign the transaction for.
 /// \return The JSON representation of a `SigningOutput` proto object.
-TW_EXPORT_FUNC TWString *_Nonnull TWAnySignerSignJSON(TWString *_Nonnull json, TWData *_Nonnull key, enum TWCoinType coin);
+extern TWString *_Nonnull TWAnySignerSignJSON(TWString *_Nonnull json, TWData *_Nonnull key, enum TWCoinType coin);
 
 /// Check if AnySigner supports signing JSON representation of signing input.
 ///
 /// \param coin The given coin type to sign the transaction for.
 /// \return true if AnySigner supports signing JSON representation of signing input for a given coin.
-TW_EXPORT_FUNC bool TWAnySignerSupportsJSON(enum TWCoinType coin);
+extern bool TWAnySignerSupportsJSON(enum TWCoinType coin);
 
 /// Plans a transaction (for UTXO chains only).
 ///
 /// \param input The serialized data of a signing input
 /// \param coin The given coin type to plan the transaction for.
 /// \return The serialized data of a `TransactionPlan` proto object.
-TW_EXPORT_FUNC TWData *_Nonnull TWAnySignerPlan(TWData *_Nonnull input, enum TWCoinType coin);
+extern TWData *_Nonnull TWAnySignerPlan(TWData *_Nonnull input, enum TWCoinType coin);
 
 TW_EXTERN_C_END

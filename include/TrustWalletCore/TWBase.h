@@ -7,7 +7,7 @@
 #if !defined(TW_EXTERN_C_BEGIN)
 #if defined(__cplusplus)
 #define TW_EXTERN_C_BEGIN extern "C" {
-#define TW_EXTERN_C_END   }
+#define TW_EXTERN_C_END }
 #else
 #define TW_EXTERN_C_BEGIN
 #define TW_EXTERN_C_END
@@ -45,22 +45,22 @@
 #define TW_METHOD_DISCARDABLE_RESULT
 
 // Marker for Protobuf types to be serialized across the interface
-#define PROTO(x) TWData *
+#define PROTO(x) TWData*
 
 #if __has_feature(assume_nonnull)
 #define TW_ASSUME_NONNULL_BEGIN _Pragma("clang assume_nonnull begin")
-#define TW_ASSUME_NONNULL_END   _Pragma("clang assume_nonnull end")
+#define TW_ASSUME_NONNULL_END _Pragma("clang assume_nonnull end")
 #else
 #define TW_ASSUME_NONNULL_BEGIN
 #define TW_ASSUME_NONNULL_END
 #endif
 
 #if defined(__cplusplus) && (__cplusplus >= 201402L)
-#  define TW_DEPRECATED(since) [[deprecated("Since " #since)]]
-#  define TW_DEPRECATED_FOR(since, replacement) [[deprecated("Since " #since "; use " #replacement)]]
+#define TW_DEPRECATED(since) [[deprecated("Since " #since)]]
+#define TW_DEPRECATED_FOR(since, replacement) [[deprecated("Since " #since "; use " #replacement)]]
 #else
-#  define TW_DEPRECATED(since)
-#  define TW_DEPRECATED_FOR(since, replacement)
+#define TW_DEPRECATED(since)
+#define TW_DEPRECATED_FOR(since, replacement)
 #endif
 
 #if !__has_feature(nullability)
