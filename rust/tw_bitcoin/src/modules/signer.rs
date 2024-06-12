@@ -1,8 +1,8 @@
 use crate::{BitcoinEntry, Error, Result};
 use bitcoin::key::{TapTweak, TweakedKeyPair};
 use bitcoin::sighash::{EcdsaSighashType, TapSighashType};
-use secp256k1::{KeyPair, Message, Secp256k1};
 use hashbrown::HashMap;
+use secp256k1::{KeyPair, Message, Secp256k1};
 use tw_coin_entry::coin_context::CoinContext;
 use tw_coin_entry::coin_entry::{PrivateKeyBytes, SignatureBytes};
 use tw_misc::traits::ToBytesVec;
@@ -192,7 +192,8 @@ impl Signer {
                             // production.
                             secp.sign_schnorr_no_aux_rand(&sighash, &tweaked)
                         } else {
-                            secp.sign_schnorr(&sighash, &tweaked)
+                            //secp.sign_schnorr(&sighash, &tweaked)
+                            secp.sign_schnorr_no_aux_rand(&sighash, &tweaked)
                         };
 
                         let sig = bitcoin::taproot::Signature {
@@ -216,7 +217,8 @@ impl Signer {
                             // production.
                             secp.sign_schnorr_no_aux_rand(&sighash, &keypair)
                         } else {
-                            secp.sign_schnorr(&sighash, &keypair)
+                            //secp.sign_schnorr(&sighash, &keypair)
+                            secp.sign_schnorr_no_aux_rand(&sighash, &keypair)
                         };
 
                         let sig = bitcoin::taproot::Signature {

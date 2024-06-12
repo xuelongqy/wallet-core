@@ -10,6 +10,7 @@ fuzz = ["arbitrary"]
 # Enable in fuzz tests only!
 arbitrary = { version = "1", features = ["derive"], optional = true }
 quick-protobuf = "0.8.1"
+hashbrown = "0.14.5"
 
 [build-dependencies]
 pb-rs = "0.10.0"

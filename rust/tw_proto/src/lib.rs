@@ -2,8 +2,14 @@
 //
 // Copyright © 2017 Trust Wallet.
 
-use quick_protobuf::{BytesReader, MessageInfo, Writer};
+#![no_std]
 
+extern crate alloc;
+extern crate hashbrown;
+
+use alloc::vec::Vec;
+use alloc::{format, string::String};
+use quick_protobuf::{BytesReader, MessageInfo, Writer};
 #[allow(non_snake_case)]
 #[rustfmt::skip]
 mod common;

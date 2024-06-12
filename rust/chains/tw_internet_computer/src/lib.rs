@@ -8,3 +8,5 @@ pub mod entry;
 pub mod protocol;
 pub mod signer;
 pub mod transactions;
+
+extern crate alloc;

@@ -48,6 +48,8 @@ fn main() {
 
     let out_protos = ConfigBuilder::new(&protos, None, Some(&out_dir), &[proto_dir])
         .expect("Error configuring pb-rs builder")
+        .nostd(true)
+        .hashbrown(true)
         .build();
     FileDescriptor::run(&out_protos).expect("Error generating proto files");
 

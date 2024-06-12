@@ -59,6 +59,8 @@ fn main() {
     .expect("Error configuring pb-rs builder")
     .gen_info(true)
     .dont_use_cow(true)
+    .nostd(true)
+    .hashbrown(true)
     .build();
     FileDescriptor::run(&out_protos).expect("Error generating proto files");
 }

@@ -4,7 +4,7 @@
 
 use crate::Common::Proto::SigningError;
 use crate::EthereumAbi::Proto::AbiError;
-use std::fmt;
+use alloc::fmt;
 
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

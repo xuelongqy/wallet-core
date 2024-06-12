@@ -2,6 +2,8 @@
 //
 // Copyright © 2017 Trust Wallet.
 
+extern crate alloc;
+
 pub mod address;
 pub mod context;
 pub mod modules;
