@@ -5,7 +5,7 @@
 use crate::modules::signing_request::SigningRequestBuilder;
 use crate::modules::tx_builder::utxo_protobuf::parse_out_point;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::coin_context::CoinContext;
 use tw_coin_entry::error::prelude::*;
 use tw_coin_entry::modules::plan_builder::PlanBuilder;

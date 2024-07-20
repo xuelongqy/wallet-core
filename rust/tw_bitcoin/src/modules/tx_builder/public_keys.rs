@@ -2,7 +2,7 @@
 //
 // Copyright © 2017 Trust Wallet.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::error::prelude::*;
 use tw_hash::hasher::sha256_ripemd;
 use tw_hash::H160;

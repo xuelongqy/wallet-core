@@ -3,7 +3,7 @@
 // Copyright © 2017 Trust Wallet.
 
 use crate::modules::sighash_computer::TaprootTweak;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_coin_entry::error::prelude::*;
 use tw_hash::H264;
 use tw_keypair::{ecdsa, schnorr};

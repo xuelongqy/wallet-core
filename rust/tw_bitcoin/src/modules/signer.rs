@@ -1,7 +1,10 @@
-use crate::{BitcoinEntry, Error, Result};
-use bitcoin::key::{TapTweak, TweakedKeyPair};
-use bitcoin::sighash::{EcdsaSighashType, TapSighashType};
-use secp256k1::{KeyPair, Message, Secp256k1};
+// SPDX-License-Identifier: Apache-2.0
+//
+// Copyright © 2017 Trust Wallet.
+
+use crate::modules::protobuf_builder::ProtobufBuilder;
+use crate::modules::signing_request::SigningRequestBuilder;
+use std::borrow::Cow;
 use tw_coin_entry::coin_context::CoinContext;
 use tw_coin_entry::error::prelude::*;
 use tw_coin_entry::signing_output_error;
