@@ -18,7 +18,6 @@ tw_proto = { path = "../tw_proto" }
 tw_utxo = { path = "../frameworks/tw_utxo" }
 tw_bech32_address = { path = "../tw_bech32_address" }
 tw_base58_address = { path = "../tw_base58_address" }
-hashbrown = "0.14.5"
 
 [dev-dependencies]
 wallet-core-rs = { path = "../wallet_core_rs" }
