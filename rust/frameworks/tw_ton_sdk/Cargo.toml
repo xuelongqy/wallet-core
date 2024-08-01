@@ -15,6 +15,7 @@ tw_keypair = { path = "../../tw_keypair" }
 tw_hash = { path = "../../tw_hash" }
 tw_memory = { path = "../../tw_memory" }
 tw_number = { path = "../../tw_number" }
+hashbrown = "0.14.5"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }

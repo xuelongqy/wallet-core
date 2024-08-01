@@ -9,7 +9,7 @@ use crate::boc::BagOfCells;
 use crate::cell::{Cell, CellArc};
 use crate::error::{CellErrorType, CellResult};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tw_coin_entry::error::prelude::{OrTWError, ResultContext};
 use tw_hash::H256;
