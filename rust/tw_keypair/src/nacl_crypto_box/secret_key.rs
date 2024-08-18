@@ -5,6 +5,7 @@
 use crate::nacl_crypto_box::public_key::PublicKey;
 use crate::rand::{CryptoRngCore, OsRng};
 use crate::KeyPairError;
+use nostd_random::rand::NoStdRng;
 use tw_hash::H256;
 use tw_misc::traits::ToBytesZeroizing;
 use zeroize::Zeroizing;
@@ -15,7 +16,7 @@ pub struct SecretKey {
 
 impl SecretKey {
     pub fn random() -> SecretKey {
-        SecretKey::generate(&mut OsRng)
+        SecretKey::generate(&mut NoStdRng)
     }
 
     pub fn generate<T: CryptoRngCore>(rand: &mut T) -> SecretKey {

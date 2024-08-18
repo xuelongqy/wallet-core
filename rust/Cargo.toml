@@ -32,6 +32,7 @@ members = [
     "tw_proto",
     "wallet_core_bin",
     "wallet_core_rs",
+    "nostd_random",
 ]
 
 [profile.release]

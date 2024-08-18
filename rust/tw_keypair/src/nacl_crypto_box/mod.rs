@@ -4,6 +4,7 @@
 
 use crate::{KeyPairError, KeyPairResult};
 use crypto_box::aead::Aead;
+use nostd_random::rand::NoStdRng;
 use tw_hash::H192;
 use tw_memory::Data;
 
@@ -26,10 +27,9 @@ impl CryptoBox {
         other_pubkey: &PublicKey,
         message: &[u8],
     ) -> KeyPairResult<Data> {
-        use crate::rand::OsRng;
         use crypto_box::aead::AeadCore;
 
-        let nonce = crypto_box::SalsaBox::generate_nonce(&mut OsRng);
+        let nonce = crypto_box::SalsaBox::generate_nonce(&mut NoStdRng);
         let nonce = H192::try_from(nonce.as_slice()).map_err(|_| KeyPairError::InternalError)?;
         let encrypted = Self::encrypt(my_secret, other_pubkey, message, nonce)?;
 
@@ -72,7 +72,7 @@ impl CryptoBox {
         let encrypted = &encrypted_with_nonce[NONCE_LEN..];
 
         Self::decrypt(my_secret, other_pubkey, encrypted, nonce)
-    }
+    } 
 
     /// Decrypts a box produced by [`CryptoBox::encrypt`] by using the same `nonce`.
     pub fn decrypt(

@@ -49,6 +49,7 @@ tw_solana = { path = "../chains/tw_solana", optional = true }
 tw_ton = { path = "../chains/tw_ton", optional = true }
 uuid = { version = "1.7", features = ["v4"], optional = true }
 rand = { version = "0.8.5", features = ["small_rng"], default-features = false }
+nostd_random = { path = "../nostd_random" }
 
 [dev-dependencies]
 serde_json = "1.0"
