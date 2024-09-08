@@ -1,13 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
-//
-// Copyright © 2017 Trust Wallet.
-//
-
 #include <cstddef>
 #include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <emscripten.h>
 
 static uint32_t nextSrand = 0;
 
