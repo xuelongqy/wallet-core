@@ -24,6 +24,12 @@
         "path": "m/84'/1'/0'/0/0",
         "xpub": "zpub",
         "xprv": "zprv"
+      },
+      {
+        "name": "taproot",
+        "path": "m/86'/0'/0'/0/0",
+        "xpub": "zpub",
+        "xprv": "zprv"
       }
     ],
     "curve": "secp256k1",
@@ -1453,7 +1459,7 @@
     "coinId": 145,
     "symbol": "BCH",
     "decimals": 8,
-    "blockchain": "Bitcoin",
+    "blockchain": "BitcoinCash",
     "derivation": [
       {
         "path": "m/44'/145'/0'/0/0",
@@ -3667,7 +3673,7 @@
     "coinId": 899,
     "symbol": "XEC",
     "decimals": 2,
-    "blockchain": "Bitcoin",
+    "blockchain": "BitcoinCash",
     "derivation": [
       {
         "path": "m/44'/899'/0'/0/0",
