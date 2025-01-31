@@ -47,7 +47,6 @@ fn test_coin_address_derivation() {
             | CoinType::Celo
             | CoinType::ConfluxeSpace
             | CoinType::CronosChain
-            | CoinType::ECOChain
             | CoinType::EthereumClassic
             | CoinType::Evmos
             | CoinType::Fantom
@@ -91,6 +90,7 @@ fn test_coin_address_derivation() {
             | CoinType::Blast
             | CoinType::BounceBit
             | CoinType::ZkLinkNova
+            | CoinType::Sonic
             // end_of_evm_address_derivation_tests_marker_do_not_modify
                 => "0xAc1ec44E4f0ca7D172B7803f6836De87Fb72b309",
             CoinType::Bitcoin => "bc1qten42eesehw0ktddcp0fws7d3ycsqez3f7d5yt",
@@ -157,6 +157,9 @@ fn test_coin_address_derivation() {
             CoinType::Polkadot => "12dyy3fArMPDXLsnRtapTqZsC2KCEimeqs1dop4AEERaKC6x",
             CoinType::Acala => "22WaYy5ChG8V5vvRVDP4ErE7esk8nZ4rjGYwxeVArnNT8dU3",
             CoinType::Kusama => "EDJV2jycw8fqTgiExLsDe6iUzbnM62hDk7u3BLm9wcYswkY",
+            CoinType::Zcash => "t1SUmK7UVqTXQDpEAqHcJWBv7pNUFHJRpDx",
+            CoinType::Zelcash => "t1SUmK7UVqTXQDpEAqHcJWBv7pNUFHJRpDx",
+            CoinType::Komodo => "RHtMPHweTxYNhBYUN2nJTu9QKyjm7MRKsF",
             // end_of_coin_address_derivation_tests_marker_do_not_modify
             _ => panic!("{:?} must be covered", coin),
         };
