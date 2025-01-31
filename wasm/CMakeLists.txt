@@ -2,8 +2,8 @@
 #
 # Copyright © 2017 Trust Wallet.
 
-file(GLOB wasm_sources ../src/interface/*.cpp src/RandomWasi.cpp)
-file(GLOB wasm_headers ../include/TrustWalletCore/*.h)
+file(GLOB wasm_sources ../src/interface/*.cpp ../src/Generated/*.cpp src/RandomWasi.cpp)
+file(GLOB wasm_headers ../include/TrustWalletCore/*.h ../include/Generated/TrustWalletCore/*.h)
 set(TARGET_NAME wallet-core)
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
 add_executable(${TARGET_NAME} ${wasm_sources} ${wasm_headers})

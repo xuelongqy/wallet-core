@@ -10,7 +10,7 @@ extern crate hashbrown;
 use alloc::vec::Vec;
 use alloc::{format, string::String};
 use quick_protobuf::{BytesReader, MessageInfo, Writer};
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 #[allow(non_snake_case)]
 #[rustfmt::skip]
