@@ -48,7 +48,7 @@ pub mod hashmap_as_tupple_list {
     use serde::de::{SeqAccess, Visitor};
     use serde::ser::SerializeSeq;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::fmt;
     use std::hash::Hash;
 

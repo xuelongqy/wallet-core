@@ -4,7 +4,7 @@
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tw_misc::serde::hashmap_as_tupple_list;
 
 pub const DEFINITIONS_JSON: &str = include_str!("../definitions/definitions.json");
