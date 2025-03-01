@@ -1,3 +1,4 @@
+use heck::ToLowerCamelCase;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
@@ -36,6 +37,7 @@ fn convert_standard_type_to_cpp(ty: &str) -> String {
     match ty {
         "TWPrivateKey" => "struct TWPrivateKey".to_string(),
         "TWPublicKey" => "struct TWPublicKey".to_string(),
+        "TWDataVector" => "struct TWDataVector".to_string(),
         _ => ty.to_string(),
     }
 }
@@ -72,6 +74,7 @@ fn convert_rust_type_to_cpp(ty: &str) -> String {
             "i16" => "int16_t".to_string(),
             "i32" => "int32_t".to_string(),
             "i64" => "int64_t".to_string(),
+            "TWFFICoinType" => "enum TWCoinType".to_string(),
             _ => ty.to_string(),
         }
     }
@@ -108,6 +111,12 @@ fn generate_header_includes(file: &mut std::fs::File, info: &TWConfig) -> Result
             if arg.ty.contains("TWPublicKey") && included_headers.insert("TWPublicKey.h") {
                 writeln!(file, "#include \"TWPublicKey.h\"")?;
             }
+            if arg.ty.contains("TWDataVector") && included_headers.insert("TWDataVector.h") {
+                writeln!(file, "#include \"TWDataVector.h\"")?;
+            }
+            if arg.ty.contains("TWFFICoinType") && included_headers.insert("TWCoinType.h") {
+                writeln!(file, "#include \"TWCoinType.h\"")?;
+            }
             // Additional type checks can be added here in the future
         }
     }
@@ -138,7 +147,7 @@ fn generate_function_signature(
             &mut signature,
             "{} {}",
             convert_rust_type_to_cpp(&arg.ty),
-            arg.name
+            arg.name.to_lower_camel_case()
         )
         .map_err(|e| BadFormat(e.to_string()))?;
         if i < func.args.len() - 1 {
@@ -198,6 +207,9 @@ fn generate_source_includes(file: &mut std::fs::File, info: &TWConfig) -> Result
             if arg.ty.contains("TWPublicKey") && included_headers.insert("TWPublicKey.h") {
                 writeln!(file, "#include \"../PublicKey.h\"")?;
             }
+            if arg.ty.contains("TWDataVector") && included_headers.insert("TWDataVector.h") {
+                writeln!(file, "#include \"../DataVector.h\"")?;
+            }
             // Additional type checks can be added here in the future
         }
     }
@@ -243,6 +255,17 @@ fn generate_return_type(func: &TWStaticFunction, converted_args: &Vec<String>) -
             )
             .map_err(|e| BadFormat(e.to_string()))?;
         }
+        "Nonnull<TWData>" | "NonnullMut<TWData>" => {
+            write!(
+                &mut return_string,
+                "\tconst Rust::TWDataWrapper result = Rust::{}{}\n\
+                \tconst auto resultData = result.toDataOrDefault();\n\
+                \treturn TWDataCreateWithBytes(resultData.data(), resultData.size());\n",
+                func.rust_name,
+                generate_function_call(&converted_args)?.as_str()
+            )
+            .map_err(|e| BadFormat(e.to_string()))?;
+        }
         "NullableMut<TWPrivateKey>" | "Nullable<TWPrivateKey>" => {
             write!(
                 &mut return_string,
@@ -273,7 +296,7 @@ fn generate_return_type(func: &TWStaticFunction, converted_args: &Vec<String>) -
             .map_err(|e| BadFormat(e.to_string()))?;
         }
         ty if ty.contains("Nonnull") => {
-            panic!("Nonnull types are not supported in C++");
+            panic!("Nonnull types are not supported in C++ except for TWData");
         }
         _ => {
             write!(
@@ -338,7 +361,7 @@ fn generate_conversion_code_with_var_name(ty: &str, name: &str) -> Result<(Strin
             let mut conversion_code = String::new();
             writeln!(
                 &mut conversion_code,
-                "\tauto &{name}PrivateKey = *reinterpret_cast<const TW::PrivateKey*>(a);\n\
+                "\tauto &{name}PrivateKey = *reinterpret_cast<const TW::PrivateKey*>({name});\n\
                 \tauto* {name}RustRaw = Rust::tw_private_key_create_with_data({name}PrivateKey.bytes.data(), {name}PrivateKey.bytes.size());\n\
                 \tconst auto {name}RustPrivateKey = Rust::wrapTWPrivateKey({name}RustRaw);"
             )
@@ -363,8 +386,9 @@ fn generate_conversion_code_with_var_name(ty: &str, name: &str) -> Result<(Strin
             let mut conversion_code = String::new();
             writeln!(
                 &mut conversion_code,
-                "\tauto &{name}PublicKey = *reinterpret_cast<const TW::PublicKey*>(a);\n\
-                \tauto* {name}RustRaw = Rust::tw_public_key_create_with_data({name}PublicKey.bytes.data(), {name}PublicKey.bytes.size(), {name}PublicKey.type);\n\
+                "\tauto &{name}PublicKey = *reinterpret_cast<const TW::PublicKey*>({name});\n\
+                \tconst auto {name}PublicKeyType = static_cast<uint32_t>({name}PublicKey.type);\n\
+                \tauto* {name}RustRaw = Rust::tw_public_key_create_with_data({name}PublicKey.bytes.data(), {name}PublicKey.bytes.size(), {name}PublicKeyType);\n\
                 \tconst auto {name}RustPublicKey = Rust::wrapTWPublicKey({name}RustRaw);"
             )
             .map_err(|e| BadFormat(e.to_string()))?;
@@ -377,12 +401,34 @@ fn generate_conversion_code_with_var_name(ty: &str, name: &str) -> Result<(Strin
                 "\tstd::shared_ptr<TW::Rust::TWPublicKey> {name}RustPublicKey;\n\
                 \tif ({name} != nullptr) {{\n\
                     \t\tconst auto& {name}PublicKey = {name};\n\
-                    \t\tauto* {name}RustRaw = Rust::tw_public_key_create_with_data({name}PublicKey->impl.bytes.data(), {name}PublicKey->impl.bytes.size(), {name}PublicKey->impl.type);\n\
+                    \t\tconst auto {name}PublicKeyType = static_cast<uint32_t>({name}PublicKey->impl.type);\n\
+                    \t\tauto* {name}RustRaw = Rust::tw_public_key_create_with_data({name}PublicKey->impl.bytes.data(), {name}PublicKey->impl.bytes.size(), {name}PublicKeyType);\n\
                     \t\t{name}RustPublicKey = Rust::wrapTWPublicKey({name}RustRaw);\n\
                 \t}}"
             )
             .map_err(|e| BadFormat(e.to_string()))?;
             Ok((conversion_code, format!("{}RustPublicKey.get()", name)))
+        }
+        "struct TWDataVector *_Nonnull" => {
+            let mut conversion_code = String::new();
+            writeln!(
+                &mut conversion_code,
+                "\tconst Rust::TWDataVectorWrapper {name}RustDataVector = createFromTWDataVector({name});"
+            )
+            .map_err(|e| BadFormat(e.to_string()))?;
+            Ok((conversion_code, format!("{}RustDataVector.get()", name)))
+        }
+        "struct TWDataVector *_Nullable" => {
+            let mut conversion_code = String::new();
+            writeln!(
+                &mut conversion_code,
+                "\tstd::shared_ptr<TW::Rust::TWDataVector> {name}RustDataVector;\n\
+                \tif ({name} != nullptr) {{\n\
+                    \t\t{name}RustDataVector = createFromTWDataVector({name});\n\
+                \t}}"
+            )
+            .map_err(|e| BadFormat(e.to_string()))?;
+            Ok((conversion_code, format!("{}RustDataVector.get()", name)))
         }
         _ => Ok(("".to_string(), name.to_string())),
     }
@@ -399,7 +445,7 @@ fn generate_function_definition(
     for arg in func.args.iter() {
         let func_type = convert_rust_type_to_cpp(&arg.ty);
         let (conversion_code, converted_arg) =
-            generate_conversion_code_with_var_name(&func_type, &arg.name)?;
+            generate_conversion_code_with_var_name(&func_type, &arg.name.to_lower_camel_case())?;
         func_def += conversion_code.as_str();
         converted_args.push(converted_arg);
     }
