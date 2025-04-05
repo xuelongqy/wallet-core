@@ -171,7 +171,7 @@ TEST(Barz, SignK1TransferAccountDeployed) {
     user_operation.set_sender(sender);
 
     input.set_private_key(key.data(), key.size());
-    auto& transfer = *input.mutable_transaction()->mutable_transfer();
+    auto& transfer = *input.mutable_transaction()->mutable_scw_execute()->mutable_transaction()->mutable_transfer();
     transfer.set_amount(amount.data(), amount.size());
 
     std::string expected = "{\"callData\":\"0xb61d27f600000000000000000000000061061fcae11fd5461535e134eff67a98cfff44e9000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000\",\"callGasLimit\":\"100000\",\"initCode\":\"0x\",\"maxFeePerGas\":\"7033440745\",\"maxPriorityFeePerGas\":\"7033440745\",\"nonce\":\"2\",\"paymasterAndData\":\"0x\",\"preVerificationGas\":\"46856\",\"sender\":\"0xb16Db98B365B1f89191996942612B14F1Da4Bd5f\",\"signature\":\"0x80e84992ebf8d5f71180231163ed150a7557ed0aa4b4bcee23d463a09847e4642d0fbf112df2e5fa067adf4b2fa17fc4a8ac172134ba5b78e3ec9c044e7f28d71c\",\"verificationGasLimit\":\"100000\"}";
@@ -224,7 +224,7 @@ TEST(Barz, SignR1TransferAccountNotDeployed) {
     user_operation.set_init_code(initCode.data(), initCode.size());
 
     input.set_private_key(key.data(), key.size());
-    auto& transfer = *input.mutable_transaction()->mutable_transfer();
+    auto& transfer = *input.mutable_transaction()->mutable_scw_execute()->mutable_transaction()->mutable_transfer();
     transfer.set_amount(amount.data(), amount.size());
 
     std::string expected = "{\"callData\":\"0xb61d27f600000000000000000000000061061fcae11fd5461535e134eff67a98cfff44e9000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000\",\"callGasLimit\":\"2500000\",\"initCode\":\"0x3fc708630d85a3b5ec217e53100ec2b735d4f800296601cd0000000000000000000000005034534efe9902779ed6ea6983f435c00f3bc51000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004104b173a6a812025c40c38bac46343646bd0a8137c807aae6e04aac238cc24d2ad2116ca14d23d357588ff2aabd7db29d5976f4ecc8037775db86f67e873a306b1f00000000000000000000000000000000000000000000000000000000000000\",\"maxFeePerGas\":\"7033440745\",\"maxPriorityFeePerGas\":\"7033440745\",\"nonce\":\"0\",\"paymasterAndData\":\"0x\",\"preVerificationGas\":\"46856\",\"sender\":\"0x1392Ae041BfBdBAA0cFF9234a0C8F64df97B7218\",\"signature\":\"0xbf1b68323974e71ad9bd6dfdac07dc062599d150615419bb7876740d2bcf3c8909aa7e627bb0e08a2eab930e2e7313247c9b683c884236dd6ea0b6834fb2cb0a1b\",\"verificationGasLimit\":\"3000000\"}";
@@ -286,7 +286,7 @@ TEST(Barz, SignR1BatchedTransferAccountDeployed) {
     auto transferCall = data(TWDataBytes(transferCallEncoded.get()), TWDataSize(transferCallEncoded.get()));
     EXPECT_EQ(hex(transferCall), "a9059cbb0000000000000000000000005ff137d4b0fdcd49dca30c7cf57e578a026d27890000000000000000000000000000000000000000000000008ac7230489e80000");
 
-    auto *batch = input.mutable_transaction()->mutable_batch();
+    auto *batch = input.mutable_transaction()->mutable_scw_batch();
     auto *c1 = batch->add_calls();
     c1->set_address(to);
     c1->set_amount(amount.data(), amount.size());
@@ -446,24 +446,33 @@ TEST(Barz, SignAuthorization) {
 TEST(Barz, GetEncodedHash) {
     {
         const auto chainId = store(uint256_t(31337), 32);
-        std::cout << "chainId: " << hexEncoded(chainId) << std::endl;
-        const auto wallet = "0x174a240e5147D02dE4d7724D5D3E1c1bF11cE029";
-        const auto version = "v0.1.0";
+        const auto codeAddress = "0x2e234DAe75C793f67A35089C9d99245E1C58470b";
+        const auto codeName = "Biz";
+        const auto codeVersion = "v1.0.0";
         const auto typeHash = "0x4f51e7a567f083a31264743067875fc6a7ae45c32c5bd71f6a998c4625b13867";
-        const auto domainSeparatorHash = "0x293ce8821a350a49f08b53d14e10112c36c7fbf3b8eb7078497893f3ea477f6b";
-        const auto hash = "0xf177858c1c500e51f38ffe937bed7e4d3a8678725900be4682d3ce04d97071eb";
+        const auto domainSeparatorHash = "0xd87cd6ef79d4e2b95e15ce8abf732db51ec771f1ca2edccf22a46c729ac56472";
+        const auto sender = "0x174a240e5147D02dE4d7724D5D3E1c1bF11cE029";
+        const auto userOpHash = "0xf177858c1c500e51f38ffe937bed7e4d3a8678725900be4682d3ce04d97071eb";
 
-        const auto& encodedHash = Barz::getEncodedHash(chainId, wallet, version, typeHash, domainSeparatorHash, hash);
-        ASSERT_EQ(hexEncoded(encodedHash), "0x59ebb8c4e48c115eeaf2ea7d3a0802754462761c5019df8d2a38effb226191d5");
+        const auto& encodedHash = Barz::getEncodedHash(
+            chainId,
+            codeAddress,
+            codeName,
+            codeVersion,
+            typeHash,
+            domainSeparatorHash,
+            sender,
+            userOpHash);
+        ASSERT_EQ(hexEncoded(encodedHash), "0xc63891abc38f7a991f89ad7cb6d7e53543627b0536c3f5e545b736756c971635");
     }
 }
 
 TEST(Barz, GetSignedHash) {
     {
-        const auto hash = "0x59ebb8c4e48c115eeaf2ea7d3a0802754462761c5019df8d2a38effb226191d5";
+        const auto hash = "0xc63891abc38f7a991f89ad7cb6d7e53543627b0536c3f5e545b736756c971635";
         const auto privateKey = "0x947dd69af402e7f48da1b845dfc1df6be593d01a0d8274bd03ec56712e7164e8";
         const auto signedHash = Barz::getSignedHash(hash, privateKey);
-        ASSERT_EQ(hexEncoded(signedHash), "0x34a7792a140f52358925a57bca8ea936d70133b285396040ac0507597ed5c70a3148964ba1e0b32b8f59fbd9c098a4ec2b9ae5e5739ce4aeccae0f73279d50da1b");
+        ASSERT_EQ(hexEncoded(signedHash), "0xa29e460720e4b539f593d1a407827d9608cccc2c18b7af7b3689094dca8a016755bca072ffe39bc62285b65aff8f271f20798a421acf18bb2a7be8dbe0eb05f81c");
     }
 }
 
