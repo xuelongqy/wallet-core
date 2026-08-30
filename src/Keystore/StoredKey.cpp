@@ -521,6 +521,11 @@ void StoredKey::store(const std::string& path) const {
 }
 
 void StoredKey::storeWithTemporaryFile(const std::string& path, const std::string& tempFilePath) const {
+#if defined(__EMSCRIPTEN__)
+    // The emscripten standalone wasm build links `__syscall_unlinkat`/`__syscall_renameat`
+    // as host imports, which wasm_run does not provide. Fall back to a plain write.
+    store(path);
+#else
     try {
         store(tempFilePath);
     } catch (...) {
@@ -532,6 +537,7 @@ void StoredKey::storeWithTemporaryFile(const std::string& path, const std::strin
         std::remove(tempFilePath.c_str());
         throw std::runtime_error("Failed to rename key file: temp=" + tempFilePath + ", target=" + path);
     }
+#endif
 }
 
 StoredKey StoredKey::load(const std::string& path) {
