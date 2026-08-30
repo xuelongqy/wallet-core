@@ -31,7 +31,7 @@ class AccountTests: XCTestCase {
 
         let hash = Data(hexString: "3F891FDA3704F0368DAB65FA81EBE616F4AA2A0854995DA4DC0B59D2CADBD64F")!
         let hdwallet = wallet.key.wallet(password: password)!
-        let privateKey = hdwallet.getKeyForCoin(coin: .ethereum)
+        let privateKey = hdwallet.getKeyForCoin(coin: .ethereum)!
         let result = privateKey.sign(digest: hash, curve: .secp256k1)!
 
         let publicKey = privateKey.getPublicKeySecp256k1(compressed: false)
@@ -58,9 +58,41 @@ class AccountTests: XCTestCase {
         let wallet = Wallet(keyURL: URL(fileURLWithPath: "/"), key: key)
 
         let hdwallet = wallet.key.wallet(password: password)!
-        let privateKey = hdwallet.getKeyForCoin(coin: .bitcoin)
+        let privateKey = hdwallet.getKeyForCoin(coin: .bitcoin)!
 
         XCTAssertEqual(privateKey.data.hexString, "b511e175dc474c810ad567557a13a29f9e82576990d5f36dab342dd2d00fb5c4")
+    }
+
+    func testDecodeValidAccount() throws {
+        let json = """
+        {
+            "coin": 60,
+            "address": "0xC2D7CF95645D33006175B78989035C7c9061d3F9",
+            "derivation": 0,
+            "derivationPath": "m/44'/60'/0'/0/0",
+            "publicKey": "0499c6f51ad6f98c9c583f8e92bb7758ab2ca9a5110343cd3c30cd8f9f58984eda1d37c02c45011f7b75d74659e9b3e039af69017b0feef0b9faf7adf57e6e7a4e",
+            "extendedPublicKey": ""
+        }
+        """.data(using: .utf8)!
+        let account = try JSONDecoder().decode(Account.self, from: json)
+        XCTAssertEqual(account.address, "0xC2D7CF95645D33006175B78989035C7c9061d3F9")
+        XCTAssertEqual(account.coin, .ethereum)
+        XCTAssertEqual(account.derivation, .default)
+        XCTAssertEqual(account.derivationPath, "m/44'/60'/0'/0/0")
+    }
+
+    func testDecodeInvalidDerivationPath() throws {
+        let json = """
+        {
+            "coin": 60,
+            "address": "0x1234",
+            "derivation": 0,
+            "derivationPath": "m/2147483648",
+            "publicKey": "",
+            "extendedPublicKey": ""
+        }
+        """.data(using: .utf8)!
+        XCTAssertThrowsError(try JSONDecoder().decode(Account.self, from: json))
     }
 
     func testBCHPrivateKeyWithPaths() throws {
@@ -68,7 +100,7 @@ class AccountTests: XCTestCase {
         let wallet = Wallet(keyURL: URL(fileURLWithPath: "/"), key: key)
 
         let hdwallet = wallet.key.wallet(password: password)!
-        let privateKey = hdwallet.getKeyForCoin(coin: .bitcoinCash)
+        let privateKey = hdwallet.getKeyForCoin(coin: .bitcoinCash)!
 
         XCTAssertEqual(privateKey.data.hexString, "04b02272b75eaee0b7f1a96d667cb4629b400e2152a841c6791f802b336a8af8")
     }

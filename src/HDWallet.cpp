@@ -40,6 +40,9 @@ const int MnemonicBufLength = Mnemonic::MaxWords * (BIP39_MAX_WORD_LENGTH + 3) +
 
 template <std::size_t seedSize>
 HDWallet<seedSize>::HDWallet(const Data& seed) {
+    if (seed.size() != seedSize) {
+        throw std::invalid_argument("Invalid seed size");
+    }
     std::copy_n(seed.begin(), seedSize, this->seed.begin());
 }
 
@@ -111,6 +114,13 @@ static HDNode getMasterNode(const HDWallet<seedSize>& wallet, TWCurve curve) {
         // Derives the root Cardano HDNode from a passphrase and the entropy encoded in
         // a BIP-0039 mnemonic using the Icarus derivation (V2) scheme
         const auto entropy = wallet.getEntropy();
+        if (entropy.empty()) {
+            // Entropy is empty for mnemonics created with `check=false` that are not valid
+            // BIP-0039 English mnemonics (e.g. non-English wordlists), or for wallets
+            // constructed directly from a raw seed. Deriving from empty entropy would
+            // produce the same constant secret for every such wallet.
+            throw std::invalid_argument("Cannot derive a Cardano key: mnemonic entropy is empty");
+        }
         uint8_t secret[CARDANO_SECRET_LENGTH];
         secret_from_entropy_cardano_icarus((const uint8_t*)"", 0, entropy.data(), int(entropy.size()), secret, nullptr);
         hdnode_from_secret_cardano(secret, &node);
@@ -171,9 +181,9 @@ PrivateKey HDWallet<seedSize>::getKeyByCurve(TWCurve curve, const DerivationPath
     auto node = getNode<seedSize>(*this, curve, derivationPath);
     switch (privateKeyType) {
     case TWPrivateKeyTypeCardano: {
-        if (derivationPath.indices.size() < 4 || derivationPath.indices[3].value > 1) {
-            // invalid derivation path
-            return PrivateKey(Data(PrivateKey::cardanoKeySize), curve);
+        if (derivationPath.indices.size() < 5 || derivationPath.indices[3].value > 1) {
+            TW::memzero(&node);
+            throw std::invalid_argument("Invalid derivation path");
         }
         const DerivationPath stakingPath = cardanoStakingDerivationPath(derivationPath);
 
