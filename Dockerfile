@@ -40,7 +40,9 @@ RUN ln -s /usr/bin/clang++-14 /usr/bin/clang++
 
 # Install rust
 RUN wget "https://sh.rustup.rs" -O rustup.sh \
-    && sh rustup.sh -y
+    && echo "7d0ea0f8eba7fa1ebfe998091cd7ec4501e33ec5ca6b884eb4d894d7da5170af  rustup.sh" | sha256sum -c - \
+    && sh rustup.sh -y \
+    && rm rustup.sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 RUN rustup default nightly-2025-12-11
 RUN cargo install --force cbindgen --locked \
