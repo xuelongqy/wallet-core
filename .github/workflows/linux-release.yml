@@ -1,0 +1,200 @@
+name: Linux Shared Release
+
+on:
+  push:
+    tags:
+      - '*-linux'
+      - '*-linux-r*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source tag
+        id: release
+        env:
+          BUILD_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag=$(bash tools/linux-release-tag "$BUILD_TAG")
+          git rev-parse --verify "refs/tags/$release_tag^{commit}"
+          git fetch --no-tags https://github.com/trustwallet/wallet-core.git "refs/tags/$release_tag"
+          upstream_commit=$(git rev-parse 'FETCH_HEAD^{commit}')
+          test "$(git rev-parse "refs/tags/$release_tag^{commit}")" = "$upstream_commit"
+          git merge-base --is-ancestor "$upstream_commit" HEAD
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+  release-preflight:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # Draft releases are visible only with push access.
+    outputs:
+      release_id: ${{ steps.destination.outputs.release_id }}
+    steps:
+      # Deliberately no checkout or execution of repository scripts in this job.
+      - name: Find the existing mutable release including drafts
+        id: destination
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # BEGIN RELEASE LOOKUP (exercised by tools/tests-linux-release.py)
+          set -euo pipefail
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          release_id=$(jq -er --arg tag "$RELEASE_TAG" '
+            [.[][] | select(.tag_name == $tag)] as $matches |
+            if ($matches | length) != 1 then error("Expected exactly one existing release")
+            elif $matches[0].immutable == true then error("Release is immutable")
+            elif any($matches[0].assets[]; .name == "Linux.tar.gz") then error("Linux.tar.gz already exists")
+            else $matches[0].id end' <<< "$releases")
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          # END RELEASE LOOKUP
+
+  build:
+    needs: [preflight, release-preflight]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            architecture: x64
+          - runner: ubuntu-22.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:22.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.cache/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.cache/rustup
+      RUSTUP_TOOLCHAIN: nightly-2025-12-11
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - name: Bootstrap container for checkout
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        run: bash tools/linux-release-build setup
+      - name: Cache Cargo downloads and cbindgen
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            .cache/cargo/bin
+            .cache/cargo/registry
+            .cache/cargo/git
+          key: linux-release-${{ matrix.architecture }}-nightly-2025-12-11-cbindgen-0.29.2-${{ hashFiles('rust/Cargo.lock', 'codegen-v2/Cargo.lock', 'tools/linux-release-build') }}
+      - name: Install pinned Rust toolchain
+        run: bash tools/linux-release-build toolchain
+      - name: Cache internal dependencies
+        id: internal
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            build/local
+            !build/local/lib/libwallet_core_rs.a
+          key: linux-release-jammy-clang14-gcc11-ruby30-${{ matrix.architecture }}-${{ hashFiles('tools/linux-release-build', 'tools/install-dependencies', 'tools/download-dependencies', 'tools/dependencies-version', 'protobuf-plugin/**') }}
+      - name: Build and validate shared library
+        env:
+          INTERNAL_CACHE_HIT: ${{ steps.internal.outputs.cache-hit }}
+        run: bash tools/linux-release-build build
+      - name: Transfer library to packaging job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-lib-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.architecture }}
+          path: build/linux-artifacts/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    needs: [preflight, release-preflight, build]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: linux-release-upload-${{ needs.preflight.outputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: linux-lib-${{ github.run_id }}-${{ github.run_attempt }}-*
+          merge-multiple: true
+          path: build/linux-downloads
+      - name: Package and upload directly to GitHub Release
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          RELEASE_ID: ${{ needs.release-preflight.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/package-linux-release.py build/linux-downloads Linux.tar.gz
+          release_json=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          jq -e --arg tag "$RELEASE_TAG" '.tag_name == $tag and .immutable != true and ([.assets[].name] | index("Linux.tar.gz") | not)' <<< "$release_json"
+          gh release upload "$RELEASE_TAG" Linux.tar.gz
+          expected_digest="sha256:$(sha256sum Linux.tar.gz | cut -d ' ' -f 1)"
+          expected_size=$(stat -c %s Linux.tar.gz)
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" | jq -e \
+            --arg tag "$RELEASE_TAG" --arg digest "$expected_digest" --argjson size "$expected_size" \
+            '.tag_name == $tag and ([.assets[] | select(.name == "Linux.tar.gz" and .state == "uploaded" and .size == $size and .digest == $digest)] | length == 1)'
+          printf 'Uploaded Linux.tar.gz to %s (%s)\n' "$RELEASE_TAG" "$expected_digest" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    if: ${{ always() }}
+    needs: [preflight, release-preflight, build, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete this run attempt's temporary libraries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PREFIX: linux-lib-${{ github.run_id }}-${{ github.run_attempt }}-
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts=$(gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts?per_page=100")
+          ids=$(jq -r --arg prefix "$ARTIFACT_PREFIX" '.artifacts[] | select(.name == ($prefix + "x64") or .name == ($prefix + "arm64")) | .id' <<< "$artifacts")
+          cleanup_failed=0
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            gh api --method DELETE "repos/$GH_REPO/actions/artifacts/$id" || cleanup_failed=1
+          done <<< "$ids"
+          exit "$cleanup_failed"

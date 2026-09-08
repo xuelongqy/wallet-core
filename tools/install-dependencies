@@ -54,7 +54,7 @@ function build_protobuf() {
     cd ${PROTOBUF_DIR}/protobuf-$PROTOBUF_VERSION
 
     $CMAKE -Scmake -B . -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_MODULE_COMPATIBLE=ON
-    $CMAKE --build . -j
+    $CMAKE --build . --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
     $CMAKE --install . --prefix $PREFIX
 
     # after install, cleanup to save space (docker)
@@ -64,7 +64,7 @@ function build_protobuf() {
     # Protobuf plugins
     cd "$ROOT/protobuf-plugin"
     $CMAKE . -Bbuild -DProtobuf_DIR=$PREFIX/lib/cmake/protobuf
-    $CMAKE --build build -j
+    $CMAKE --build build --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
     $CMAKE --install build --prefix $PREFIX
     $CMAKE --build build --target clean
 

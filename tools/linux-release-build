@@ -1,0 +1,68 @@
+#!/bin/bash
+# Run inside the native Ubuntu 22.04 CI container, from the repository root.
+set -euo pipefail
+
+case "${1:-}" in
+  setup)
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      ca-certificates curl git build-essential gcc-11 g++-11 clang-14 llvm-14 \
+      cmake ninja-build ruby3.0 libboost-dev libssl-dev zlib1g-dev \
+      pkg-config autoconf automake libtool unzip xz-utils python3 perl
+    ;;
+  toolchain)
+    : "${CARGO_HOME:?}" "${RUSTUP_HOME:?}" "${RUNNER_TEMP:?}"
+    case "$(uname -m)" in
+      x86_64|aarch64) triple="$(uname -m)-unknown-linux-gnu" ;;
+      *) echo 'Unsupported build host' >&2; exit 1 ;;
+    esac
+    installer_dir=$(mktemp -d "$RUNNER_TEMP/wallet-core-rustup.XXXXXX")
+    base="https://static.rust-lang.org/rustup/archive/1.28.2/$triple/rustup-init"
+    curl --proto '=https' --tlsv1.2 -fLSs --retry 3 "$base" -o "$installer_dir/rustup-init"
+    curl --proto '=https' --tlsv1.2 -fLSs --retry 3 "$base.sha256" -o "$installer_dir/checksum"
+    expected=$(awk '{print $1}' "$installer_dir/checksum")
+    printf '%s  %s\n' "$expected" "$installer_dir/rustup-init" | sha256sum -c -
+    chmod +x "$installer_dir/rustup-init"
+    "$installer_dir/rustup-init" -y --no-modify-path --profile minimal \
+      --default-toolchain nightly-2025-12-11
+    export PATH="$CARGO_HOME/bin:$PATH"
+    rustup component add rust-src --toolchain nightly-2025-12-11
+    if ! command -v cbindgen >/dev/null || [[ "$(cbindgen --version)" != 'cbindgen 0.29.2' ]]; then
+      cargo +nightly-2025-12-11 install cbindgen --version 0.29.2 --locked --force
+    fi
+    ;;
+  build)
+    : "${CARGO_HOME:?}" "${RUSTUP_HOME:?}"
+    export PATH="$CARGO_HOME/bin:/usr/bin:$PATH"
+    export RUSTUP_TOOLCHAIN=nightly-2025-12-11
+    export CC=/usr/bin/clang-14 CXX=/usr/bin/clang++-14
+    export CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=0
+    export CMAKE_BUILD_PARALLEL_LEVEL=4
+    test "$(gcc-11 -dumpversion)" = 11
+    ruby -e 'abort "Ruby 3.0 required" unless RUBY_VERSION.start_with?("3.0.")'
+    rustc --version
+    cbindgen --version
+    "$CC" --version
+    if [[ "${INTERNAL_CACHE_HIT:-false}" != true ]]; then
+      tools/install-dependencies
+    fi
+    test "$(build/local/bin/protoc --version)" = 'libprotoc 3.20.3'
+    tools/generate-files native
+    cmake -S . -B build/linux-release -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DTW_UNIT_TESTS=OFF -DTW_BUILD_EXAMPLES=OFF \
+      -DTW_UNITY_BUILD=ON -DTW_CLANG_ASAN=OFF -DTW_CODE_COVERAGE=OFF \
+      -DTW_ENABLE_CLANG_TIDY=OFF -DCMAKE_SKIP_RPATH=ON
+    cmake --build build/linux-release --target TrustWalletCore --parallel 4
+    case "$(uname -m)" in
+      x86_64) architecture=x64 ;;
+      aarch64) architecture=arm64 ;;
+      *) exit 1 ;;
+    esac
+    python3 tools/check-shared-library.py build/linux-release/libTrustWalletCore.so \
+      --elf-architecture "$architecture"
+    mkdir -p "build/linux-artifacts/linux-$architecture"
+    cp build/linux-release/libTrustWalletCore.so "build/linux-artifacts/linux-$architecture/"
+    ;;
+  *) echo "Usage: $0 setup|toolchain|build" >&2; exit 2 ;;
+esac

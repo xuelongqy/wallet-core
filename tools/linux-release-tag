@@ -1,0 +1,8 @@
+#!/bin/bash
+# Print the upstream Release tag for an immutable Linux build/retry tag.
+set -euo pipefail
+if [[ $# != 1 || ! "$1" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-linux(-r[1-9][0-9]*)?$ ]]; then
+  echo 'Expected <version>-linux or <version>-linux-r<N>, with N >= 1' >&2
+  exit 2
+fi
+printf '%s\n' "${BASH_REMATCH[1]}"
