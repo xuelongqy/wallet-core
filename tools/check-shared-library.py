@@ -61,7 +61,7 @@ def check_api(path):
     for symbol, expected in (("TWCoinTypeConfigurationGetName", "Arc"),
                              ("TWCoinTypeConfigurationGetID", "arc"),
                              ("TWCoinTypeConfigurationGetSymbol", "USDC"),
-                             ("TWCoinTypeConfigurationGetNativeTokenName", "USD Coin")):
+                             ("TWCoinTypeConfigurationGetNativeTokenName", "USDC")):
         function = getattr(library, symbol)
         function.argtypes = [ctypes.c_uint32]
         function.restype = ctypes.c_void_p
