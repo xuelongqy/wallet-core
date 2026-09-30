@@ -160,6 +160,57 @@ class ReleaseTagTests(unittest.TestCase):
                 self.assertNotEqual(self.parse(*args).returncode, 0)
 
 
+class SourceCheckTests(unittest.TestCase):
+    def test_pinned_wasm_and_both_upstream_ancestors(self):
+        workflow = (TOOLS.parent / '.github/workflows/linux-release.yml').read_text()
+        match = re.search(r'(?ms)^ +# BEGIN SOURCE CHECK[^\n]*\n(.*?)^ +# END SOURCE CHECK', workflow)
+        self.assertIsNotNone(match)
+        script = textwrap.dedent(match.group(1))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'tools').symlink_to(TOOLS, target_is_directory=True)
+
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+
+            git('init', '-q')
+            git('config', 'user.name', 'Source test')
+            git('config', 'user.email', 'test@example.invalid')
+            git('commit', '-qm', 'root', '--allow-empty')
+            base = git('rev-parse', 'HEAD')
+            git('commit', '-qm', 'upstream', '--allow-empty')
+            upstream = git('rev-parse', 'HEAD')
+            git('commit', '-qm', 'wasi', '--allow-empty')
+            wasi = git('rev-parse', 'HEAD')
+            git('checkout', '-q', '--detach', upstream)
+            git('commit', '-qm', 'shared', '--allow-empty')
+            shared = git('rev-parse', 'HEAD')
+            stub = '''git() {
+  if [[ "$1" == fetch ]]; then
+    [[ "$FAIL_FETCH" == 0 ]] || return 22
+    command git fetch --no-tags . "$UPSTREAM_COMMIT"
+  else command git "$@"; fi
+}
+'''
+            cases = [(shared, wasi, wasi, False, True),
+                     (shared, wasi, shared, False, False),
+                     (base, wasi, wasi, False, False),
+                     (shared, base, base, False, False),
+                     (shared, wasi, wasi, True, False)]
+            for build, release, pin, fail_fetch, succeeds in cases:
+                with self.subTest(build=build, release=release, pin=pin, fail_fetch=fail_fetch):
+                    git('checkout', '-q', '--detach', build)
+                    git('update-ref', 'refs/tags/4.8.4', release)
+                    destination = root / f'output-{len(list(root.glob("output-*")))}'
+                    environment = dict(os.environ, BUILD_TAG='4.8.4-linux',
+                                       WASM_SOURCE_COMMIT=pin, UPSTREAM_COMMIT=upstream,
+                                       FAIL_FETCH=str(int(fail_fetch)), GITHUB_OUTPUT=str(destination))
+                    result = subprocess.run(['bash', '-c', stub + script], cwd=root,
+                                            env=environment, text=True, capture_output=True)
+                    self.assertEqual(result.returncode == 0, succeeds, result.stderr)
+                    self.assertEqual(destination.exists(), succeeds)
+
+
 class ReleaseLookupTests(unittest.TestCase):
     """Execute the workflow's actual inline lookup with gh replaced by a fixture."""
     def lookup(self, pages, succeeds, *, fail_api=False, raw_json=None):

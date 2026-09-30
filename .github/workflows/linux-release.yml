@@ -29,16 +29,21 @@ jobs:
         id: release
         env:
           BUILD_TAG: ${{ github.ref_name }}
+          # Exact source used for the 4.8.4 WASM asset; update for each release.
+          WASM_SOURCE_COMMIT: '68c7b9a11a38789a0e453900c92d5fbd07fbca72'
         shell: bash
         run: |
+          # BEGIN SOURCE CHECK (exercised by tools/tests-linux-release.py)
           set -euo pipefail
           release_tag=$(bash tools/linux-release-tag "$BUILD_TAG")
-          git rev-parse --verify "refs/tags/$release_tag^{commit}"
+          release_commit=$(git rev-parse --verify "refs/tags/$release_tag^{commit}")
+          test "$release_commit" = "$WASM_SOURCE_COMMIT"
           git fetch --no-tags https://github.com/trustwallet/wallet-core.git "refs/tags/$release_tag"
           upstream_commit=$(git rev-parse 'FETCH_HEAD^{commit}')
-          test "$(git rev-parse "refs/tags/$release_tag^{commit}")" = "$upstream_commit"
           git merge-base --is-ancestor "$upstream_commit" HEAD
+          git merge-base --is-ancestor "$upstream_commit" "$release_commit"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          # END SOURCE CHECK
 
   release-preflight:
     needs: preflight

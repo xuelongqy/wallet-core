@@ -9,8 +9,11 @@ It builds native x64 and ARM64 shared libraries using the exact commit of a
 1. Fast-forward `master` to the verified upstream version tag, then merge that
    version into `master-SHARED`, preserving its shared-library and visibility
    changes. Review, validate, commit and push that merge and these CI files.
-2. Ensure this fork contains the unchanged upstream version tag (e.g. `4.8.1`)
-   and an existing, mutable GitHub Release for that tag. A draft Release is
+2. From 4.8.4 onward, create the fork version tag at the exact validated `wasi`
+   source commit and set `WASM_SOURCE_COMMIT` in the workflow to that same SHA.
+   Fetch official tags without importing them into the fork's tag namespace:
+   `git fetch --no-tags upstream refs/tags/4.8.4:refs/upstream-tags/4.8.4`.
+   Ensure an existing, mutable GitHub Release for the fork tag. A draft Release is
    suitable while collecting assets. `Linux.tar.gz` must not already exist.
 3. Create and push `4.8.1-linux` at the reviewed shared-build commit. Its suffix
    maps to Release `4.8.1`. Creating or pushing this tag starts the workflow.
@@ -26,8 +29,11 @@ have removed the other architecture's temporary library. For CI/build fixes,
 commit and push the correction, then push a fresh `4.8.1-linux-r1`, `-r2`, etc.
 Each retry maps to Release `4.8.1` and remains immutable. Keep the Release in
 draft until checks pass. Existing assets are never automatically replaced.
-The workflow verifies that the fork's version tag matches the upstream tag and
-that its commit is an ancestor of the checked-out build tag.
+The workflow verifies that the fork's version tag matches the pinned WASM
+source commit. The official upstream commit must be an ancestor of both the
+checked-out shared-library build commit and the fork's `wasi` release commit.
+These two customized branches need not be ancestors of each other. Previously
+published version tags retain their original sources.
 
 The Release lookup uses paginated release lists, including drafts, and requires
 exactly one matching tag. The ID is carried to the upload job for subsequent
@@ -80,6 +86,9 @@ Packaging tests use synthetic ELF headers and verify layout, reproducibility,
 architecture mismatch rejection and non-overwriting behavior. Mocked ELF
 inspection tests also exercise the ABI-version and runtime-dependency gates.
 Tag tests cover initial/retry tags and invalid input. The workflow's actual
+source check is exercised against a temporary Git history with divergent
+shared/WASM branches, mismatched source pins and missing upstream ancestry.
+The workflow's actual
 inline Release lookup is exercised with mocked paginated GitHub responses,
 including drafts, missing/duplicate versions, immutable releases and existing
 assets. They do not
