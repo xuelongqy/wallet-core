@@ -1,0 +1,21 @@
+#!/bin/bash
+# Native builds must be integrated into master-SHARED; both sources contain upstream.
+set -euo pipefail
+if [[ $# != 1 ]]; then
+  echo 'Expected platform (linux, windows or macos)' >&2
+  exit 2
+fi
+release_tag=$(bash "$(dirname "${BASH_SOURCE[0]}")/shared-release-tag" "$1" "$BUILD_TAG")
+if [[ ! "${WASM_SOURCE_COMMIT:-}" =~ ^[0-9a-f]{40}$ ]]; then
+  echo 'Set WASM_SOURCE_COMMIT to the reviewed WASI source commit before releasing' >&2
+  exit 2
+fi
+release_commit=$(git rev-parse --verify "refs/tags/$release_tag^{commit}")
+test "$release_commit" = "$WASM_SOURCE_COMMIT"
+git fetch --no-tags origin refs/heads/master-SHARED
+git merge-base --is-ancestor HEAD 'FETCH_HEAD^{commit}'
+git fetch --no-tags https://github.com/trustwallet/wallet-core.git "refs/tags/$release_tag"
+upstream_commit=$(git rev-parse 'FETCH_HEAD^{commit}')
+git merge-base --is-ancestor "$upstream_commit" HEAD
+git merge-base --is-ancestor "$upstream_commit" "$release_commit"
+echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"

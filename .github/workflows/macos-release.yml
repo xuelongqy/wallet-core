@@ -1,0 +1,216 @@
+name: macOS C ABI XCFramework Release
+
+on:
+  push:
+    tags:
+      - '*-macos'
+      - '*-macos-r*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      wasi_source_commit: ${{ steps.release.outputs.wasi_source_commit }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source tag
+        id: release
+        env:
+          BUILD_TAG: ${{ github.ref_name }}
+          # Exact validated 4.9.3 WASI source; the plain version tag must match.
+          WASM_SOURCE_COMMIT: '6b5741e52d0b61ff0254abf8301f0c0ea77f7083'
+        shell: bash
+        run: |
+          bash tools/shared-release-source macos
+          echo "wasi_source_commit=$WASM_SOURCE_COMMIT" >> "$GITHUB_OUTPUT"
+
+  release-preflight:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # Draft releases require push access.
+    outputs:
+      release_id: ${{ steps.destination.outputs.release_id }}
+    steps:
+      # No checkout or repository scripts in this privileged lookup job.
+      - name: Find the existing mutable draft release
+        id: destination
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # BEGIN RELEASE LOOKUP (exercised by tools/tests-macos-release.py)
+          set -euo pipefail
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          release_id=$(jq -er --arg tag "$RELEASE_TAG" '
+            [.[][] | select(.tag_name == $tag)] as $matches |
+            if ($matches | length) != 1 then error("Expected exactly one existing release")
+            elif $matches[0].draft != true then error("Release must remain a draft")
+            elif $matches[0].immutable == true then error("Release is immutable")
+            elif any($matches[0].assets[]; .name == "TrustWalletCore-macos.xcframework.zip") then error("TrustWalletCore-macos.xcframework.zip already exists")
+            else $matches[0].id end' <<< "$releases")
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          # END RELEASE LOOKUP
+
+  build:
+    needs: [preflight, release-preflight]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install CMake and Ninja
+        run: brew install cmake ninja
+      - name: Cache dependency sources and native host tools
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/local
+            build/macos-release/${{ matrix.arch }}/boost_1_83_0*
+            build/macos-release/${{ matrix.arch }}/protobuf-host
+            build/macos-release/${{ matrix.arch }}/protobuf-plugin
+            build/macos-release/${{ matrix.arch }}/tools
+          key: macos-release-${{ matrix.runner }}-${{ matrix.arch }}-dependencies-${{ hashFiles('tools/macos-release-build', 'tools/dependencies-version', 'protobuf-plugin/**') }}
+      - name: Build and run the native C and SwiftPM consumers
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_tag }}
+          WASM_SOURCE_COMMIT: ${{ needs.preflight.outputs.wasi_source_commit }}
+          CMAKE_BUILD_PARALLEL_LEVEL: '2'
+          CARGO_BUILD_JOBS: '2'
+        run: bash tools/macos-release-build '${{ matrix.arch }}' "$RUNNER_TEMP/native-slice"
+      - name: Preserve framework symlinks for artifact transfer
+        run: tar -czf "$RUNNER_TEMP/native-slice.tar.gz" -C "$RUNNER_TEMP/native-slice" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos-slice-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/native-slice.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  package:
+    needs: [preflight, release-preflight, build]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: macos-slice-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/slices
+      - name: Combine, sign, and verify the relocated universal XCFramework
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          for architecture in arm64 x86_64; do
+            destination="$RUNNER_TEMP/$architecture"
+            mkdir "$destination"
+            tar -xzf "$RUNNER_TEMP/slices/macos-slice-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture/native-slice.tar.gz" -C "$destination"
+          done
+          python3 tools/package-macos-release.py package "$RUNNER_TEMP/arm64" "$RUNNER_TEMP/x86_64" "$RUNNER_TEMP/macos-package"
+          cat "$RUNNER_TEMP/macos-package/TrustWalletCore-macos.xcframework.zip.sha256" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/macos-package/TrustWalletCore-macos.xcframework.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    needs: [preflight, release-preflight, package]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: macos-release-upload-${{ needs.preflight.outputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      # The archive was created and tested by the read-only package job.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: downloads
+      - name: Upload directly to the existing draft release
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          RELEASE_ID: ${{ needs.release-preflight.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # BEGIN RELEASE UPLOAD (exercised by tools/tests-macos-release.py)
+          set -euo pipefail
+          asset=downloads/TrustWalletCore-macos.xcframework.zip
+          release_json=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          jq -e --arg tag "$RELEASE_TAG" --argjson id "$RELEASE_ID" '.id == $id and .tag_name == $tag and .draft == true and .immutable != true and ([.assets[].name] | index("TrustWalletCore-macos.xcframework.zip") | not)' <<< "$release_json"
+          gh api --method POST "https://uploads.github.com/repos/$GH_REPO/releases/$RELEASE_ID/assets?name=TrustWalletCore-macos.xcframework.zip" \
+            -H "Content-Type: application/zip" --input "$asset" > /dev/null
+          expected_digest="sha256:$(sha256sum "$asset" | cut -d ' ' -f 1)"
+          expected_size=$(stat -c %s "$asset")
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" | jq -e \
+            --arg tag "$RELEASE_TAG" --argjson id "$RELEASE_ID" --arg digest "$expected_digest" --argjson size "$expected_size" \
+            '.id == $id and .tag_name == $tag and .draft == true and .immutable != true and ([.assets[] | select(.name == "TrustWalletCore-macos.xcframework.zip" and .state == "uploaded" and .size == $size and .digest == $digest)] | length == 1)'
+          printf 'Uploaded TrustWalletCore-macos.xcframework.zip to draft %s (%s)\n' "$RELEASE_TAG" "$expected_digest" >> "$GITHUB_STEP_SUMMARY"
+          # END RELEASE UPLOAD
+
+  cleanup:
+    if: ${{ always() }}
+    needs: [preflight, release-preflight, build, package, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete this run attempt's temporary slices and package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts=$(gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts?per_page=100")
+          ids=$(jq -r --arg slice "macos-slice-$RUN_ID-$RUN_ATTEMPT-" --arg package "macos-package-$RUN_ID-$RUN_ATTEMPT" \
+            '.artifacts[] | select(.name == $package or .name == ($slice + "arm64") or .name == ($slice + "x86_64")) | .id' <<< "$artifacts")
+          cleanup_failed=0
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            gh api --method DELETE "repos/$GH_REPO/actions/artifacts/$id" || cleanup_failed=1
+          done <<< "$ids"
+          exit "$cleanup_failed"

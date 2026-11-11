@@ -1,0 +1,184 @@
+name: Windows Shared Release
+
+on:
+  push:
+    tags:
+      - '*-windows'
+      - '*-windows-r*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source tag
+        id: release
+        env:
+          BUILD_TAG: ${{ github.ref_name }}
+          # Exact validated 4.9.3 WASI source; the plain version tag must match.
+          WASM_SOURCE_COMMIT: '6b5741e52d0b61ff0254abf8301f0c0ea77f7083'
+        shell: bash
+        run: bash tools/shared-release-source windows
+
+  release-preflight:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # Draft releases require push access.
+    outputs:
+      release_id: ${{ steps.destination.outputs.release_id }}
+    steps:
+      # No checkout or repository scripts in this privileged lookup job.
+      - name: Find the existing mutable draft release
+        id: destination
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # BEGIN RELEASE LOOKUP (exercised by tools/tests-windows-release.py)
+          set -euo pipefail
+          releases=$(gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100")
+          release_id=$(jq -er --arg tag "$RELEASE_TAG" '
+            [.[][] | select(.tag_name == $tag)] as $matches |
+            if ($matches | length) != 1 then error("Expected exactly one existing release")
+            elif $matches[0].draft != true then error("Release must remain a draft")
+            elif $matches[0].immutable == true then error("Release is immutable")
+            elif any($matches[0].assets[]; .name == "Windows.tar.gz") then error("Windows.tar.gz already exists")
+            else $matches[0].id end' <<< "$releases")
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          # END RELEASE LOOKUP
+
+  build:
+    needs: [preflight, release-preflight]
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install MSYS2 build utilities
+        shell: pwsh
+        run: |
+          & C:\msys64\usr\bin\bash.exe -lc 'pacman -S --needed --noconfirm ruby perl'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Cache dependency sources and host tools
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            build/local
+            build/windows/boost_1_83_0*
+            build/windows/protobuf-host
+            build/windows/protobuf-plugin
+            build/windows/tools
+          key: windows-release-x64-dependencies-${{ hashFiles('tools/windows-build.ps1', 'tools/dependencies-version', 'protobuf-plugin/**') }}
+      - name: Build and verify x64 Release ClangCL libraries
+        shell: powershell
+        run: tools/windows-build.ps1 -Msys2Root C:\msys64 -Jobs 4
+      - name: Package and smoke-test the renamed runtime DLL
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/package-windows-release.py build/windows/WalletCore-Windows-x64 build/windows/Windows.tar.gz
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $runtime = Join-Path $env:RUNNER_TEMP 'wallet core runtime'
+          New-Item -ItemType Directory $runtime | Out-Null
+          tar -xzf build/windows/Windows.tar.gz -C $runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dll = Join-Path $runtime 'windows-x64\libTrustWalletCore.dll'
+          $original = Get-FileHash build/windows/WalletCore-Windows-x64/shared/bin/TrustWalletCore.dll -Algorithm SHA256
+          if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash -ne $original.Hash) { throw 'Renamed runtime DLL differs from the verified SDK DLL' }
+          Copy-Item build/windows/consumer-build/consumer_dynamic.exe $runtime
+          $pathBefore = $env:PATH
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          try {
+            & "$runtime\consumer_dynamic.exe" $dll
+            if ($LASTEXITCODE -ne 0) { throw "Relocated runtime consumer failed: $LASTEXITCODE" }
+          } finally { $env:PATH = $pathBefore }
+      - name: Transfer verified runtime archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-lib-${{ github.run_id }}-${{ github.run_attempt }}-x64
+          path: build/windows/Windows.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    needs: [preflight, release-preflight, build]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: windows-release-upload-${{ needs.preflight.outputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      # The archive was created and tested by the read-only build job.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-lib-${{ github.run_id }}-${{ github.run_attempt }}-x64
+          path: build/windows-downloads
+      - name: Upload directly to the existing draft release
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          RELEASE_ID: ${{ needs.release-preflight.outputs.release_id }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset=build/windows-downloads/Windows.tar.gz
+          release_json=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
+          jq -e --arg tag "$RELEASE_TAG" '.tag_name == $tag and .draft == true and .immutable != true and ([.assets[].name] | index("Windows.tar.gz") | not)' <<< "$release_json"
+          gh release upload "$RELEASE_TAG" "$asset"
+          expected_digest="sha256:$(sha256sum "$asset" | cut -d ' ' -f 1)"
+          expected_size=$(stat -c %s "$asset")
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" | jq -e \
+            --arg tag "$RELEASE_TAG" --arg digest "$expected_digest" --argjson size "$expected_size" \
+            '.tag_name == $tag and .draft == true and .immutable != true and ([.assets[] | select(.name == "Windows.tar.gz" and .state == "uploaded" and .size == $size and .digest == $digest)] | length == 1)'
+          printf 'Uploaded Windows.tar.gz to draft %s (%s)\n' "$RELEASE_TAG" "$expected_digest" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    if: ${{ always() }}
+    needs: [preflight, release-preflight, build, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete this run attempt's temporary runtime archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_NAME: windows-lib-${{ github.run_id }}-${{ github.run_attempt }}-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts=$(gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts?per_page=100")
+          ids=$(jq -r --arg name "$ARTIFACT_NAME" '.artifacts[] | select(.name == $name) | .id' <<< "$artifacts")
+          cleanup_failed=0
+          while IFS= read -r id; do
+            [[ -n "$id" ]] || continue
+            gh api --method DELETE "repos/$GH_REPO/actions/artifacts/$id" || cleanup_failed=1
+          done <<< "$ids"
+          exit "$cleanup_failed"

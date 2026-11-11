@@ -140,6 +140,7 @@ function Package-Libraries {
     Copy-Item -LiteralPath "$sharedStage\bin\TrustWalletCore.dll" -Destination "$Package\shared\bin"
     Copy-Item -LiteralPath "$StaticBuild\WalletCoreConfig.cmake" -Destination "$Package\lib\cmake\WalletCore"
     Copy-Item -LiteralPath "$Root\LICENSE" -Destination "$Package\licenses\WalletCore.txt"
+    Copy-Item -LiteralPath "$Root\LICENSE-3RD-PARTY.txt" -Destination "$Package\licenses\WalletCore-3rd-party.txt"
     Copy-Item -LiteralPath "$Prefix\src\protobuf\protobuf-$protoVersion\LICENSE" -Destination "$Package\licenses\Protobuf.txt"
     Copy-Item -LiteralPath "$Root\trezor-crypto\crypto\LICENSE" -Destination "$Package\licenses\TrezorCrypto.txt"
     Copy-Item -LiteralPath "$Build\boost_1_83_0\LICENSE_1_0.txt" -Destination "$Package\licenses\Boost.txt"

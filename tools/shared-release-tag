@@ -1,0 +1,13 @@
+#!/bin/bash
+# Print the version Release tag for an immutable platform build/retry tag.
+set -euo pipefail
+if [[ $# != 2 || ! "$1" =~ ^(linux|windows|macos)$ ]]; then
+  echo 'Expected platform (linux, windows or macos) and <version>-<platform>[-r<N>]' >&2
+  exit 2
+fi
+pattern="^([0-9]+\.[0-9]+\.[0-9]+)-$1(-r[1-9][0-9]*)?$"
+if [[ ! "$2" =~ $pattern ]]; then
+  echo 'Expected <version>-<platform> or <version>-<platform>-r<N>, with N >= 1' >&2
+  exit 2
+fi
+printf '%s\n' "${BASH_REMATCH[1]}"

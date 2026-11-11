@@ -51,6 +51,10 @@ the import library in `shared/lib`, the four static libraries in `static/lib`,
 `lib/cmake/WalletCore/WalletCoreConfig.cmake`, licenses, and SHA-256 metadata.
 The static archive remains separate from its Rust and C++ dependencies.
 
+The fork's [Windows shared-release workflow](windows-release.md) publishes a
+smaller `Windows.tar.gz` runtime asset. Its `windows-x64/libTrustWalletCore.dll`
+is a byte-identical renamed copy of the SDK DLL for wallet_core_bindings.
+
 ## Consume the DLL
 
 Install a compatible **Microsoft Visual C++ Redistributable x64** on deployment

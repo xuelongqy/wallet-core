@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Targets share binding metadata; keep them sequential and run without other
+# Cargo invocations in this checkout.
 set -e
 
 source "$(dirname $0)/parse_args" "$@"
@@ -56,7 +58,9 @@ if isTargetSpecified "android"; then
   export CC_armv7_linux_androideabi="$NDK_BIN_PATH/armv7a-linux-androideabi$NDK_API_LEVEL-clang"
 
   echo "Generating Android targets"
-  cargo build -Z build-std=std,panic_abort --target aarch64-linux-android --target armv7-linux-androideabi --target x86_64-linux-android --target i686-linux-android --release --lib
+  for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android; do
+    cargo build --locked -Z build-std=std,panic_abort --target "$target" --release --lib
+  done
 fi
 
 if isTargetSpecified "ios" && [[ $(uname -s) == "Darwin" ]]; then
@@ -68,8 +72,10 @@ if isTargetSpecified "ios" && [[ $(uname -s) == "Darwin" ]]; then
   export IPHONEOS_DEPLOYMENT_TARGET=15.0
   export CFLAGS_aarch64_apple_darwin=-mmacosx-version-min=12.0
   export CFLAGS_x86_64_apple_darwin=-mmacosx-version-min=12.0
-  cargo build -Z build-std=std,panic_abort --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios --target aarch64-apple-darwin --target x86_64-apple-darwin --target aarch64-apple-ios-macabi --target x86_64-apple-ios-macabi --release --lib &
-  wait
+  for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios \
+      aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios-macabi x86_64-apple-ios-macabi; do
+    cargo build --locked -Z build-std=std,panic_abort --target "$target" --release --lib
+  done
   lipo $BUILD_FOLDER/x86_64-apple-ios/release/$TARGET_NAME $BUILD_FOLDER/aarch64-apple-ios-sim/release/$TARGET_NAME -create -output $BUILD_FOLDER/$TARGET_NAME
   mkdir -p $BUILD_FOLDER/darwin_universal
   lipo $BUILD_FOLDER/x86_64-apple-darwin/release/$TARGET_NAME $BUILD_FOLDER/aarch64-apple-darwin/release/$TARGET_NAME -create -output $BUILD_FOLDER/darwin_universal/$TARGET_NAME

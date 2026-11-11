@@ -1,0 +1,87 @@
+#!/bin/bash
+# Fresh-checkout, native-host C ABI build. Run one generator per checkout.
+set -euo pipefail
+[[ $# == 2 && ( "$1" == arm64 || "$1" == x86_64 ) ]] || { echo 'usage: macos-release-build arm64|x86_64 NEW_OUTPUT_DIRECTORY' >&2; exit 1; }
+architecture=$1
+output=$2
+[[ "$output" == /* && ! -e "$output" ]] || { echo 'Output must be an absolute, new directory' >&2; exit 1; }
+[[ $(uname -s) == Darwin && $(uname -m) == "$architecture" ]] || { echo 'Build and runtime checks require the matching native Mac host' >&2; exit 1; }
+version=${RELEASE_VERSION:?Set RELEASE_VERSION to the validated release version}
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release version' >&2; exit 1; }
+: "${WASM_SOURCE_COMMIT:?Set the exact reviewed WASI source commit}"
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+build="$root/build/macos-release/$architecture"
+export PREFIX="$root/build/local"
+export PYTHONDONTWRITEBYTECODE=1
+export RUSTUP_TOOLCHAIN=nightly-2025-12-11
+export CC=/usr/bin/clang CXX=/usr/bin/clang++
+export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
+jobs=${CMAKE_BUILD_PARALLEL_LEVEL:-2}
+if [[ "$architecture" == arm64 ]]; then target=aarch64-apple-darwin; else target=x86_64-apple-darwin; fi
+export TW_RUST_NATIVE_TARGET=$target
+export CFLAGS_aarch64_apple_darwin=-mmacosx-version-min=12.0
+export CFLAGS_x86_64_apple_darwin=-mmacosx-version-min=12.0
+export RUSTFLAGS=-Zlocation-detail=none
+unset MACOSX_DEPLOYMENT_TARGET
+mkdir -p "$build" "$PREFIX/lib" "$PREFIX/src/protobuf" "$PREFIX/json"
+# A failed concurrent generator must not remove the other process's lock.
+mkdir "$root/build/macos-release/generator-lock" || { echo 'Another macOS generator is active in this checkout' >&2; exit 1; }
+trap 'rmdir "$root/build/macos-release/generator-lock"' EXIT
+source tools/dependencies-version
+
+fetch() {
+    [[ -f "$2" ]] || curl --fail --location --retry 3 "$1" --output "$2"
+}
+proto="$PREFIX/src/protobuf/protobuf-$PROTOBUF_VERSION"
+archive="$PREFIX/src/protobuf/protobuf-java-$PROTOBUF_VERSION.tar.gz"
+fetch "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOBUF_VERSION/protobuf-java-$PROTOBUF_VERSION.tar.gz" "$archive"
+[[ -d "$proto" ]] || tar -xzf "$archive" -C "$PREFIX/src/protobuf"
+fetch "https://github.com/nlohmann/json/releases/download/v$JSON_VERSION/include.zip" "$PREFIX/json/include.zip"
+unzip -qo "$PREFIX/json/include.zip" -d "$PREFIX"
+fetch 'https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz' "$build/boost_1_83_0.tar.gz"
+[[ -f "$build/boost_1_83_0/LICENSE_1_0.txt" ]] || tar -xzf "$build/boost_1_83_0.tar.gz" -C "$build" boost_1_83_0/boost boost_1_83_0/LICENSE_1_0.txt
+
+# Only the native protobuf compiler and the repository's two plugins are needed.
+cmake -S "$proto/cmake" -B "$build/protobuf-host" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DCMAKE_INSTALL_PREFIX="$PREFIX" -Dprotobuf_BUILD_TESTS=OFF \
+    -Dprotobuf_BUILD_SHARED_LIBS=OFF -Dprotobuf_WITH_ZLIB=OFF
+cmake --build "$build/protobuf-host" --parallel "$jobs"
+cmake --install "$build/protobuf-host"
+cmake -S protobuf-plugin -B "$build/protobuf-plugin" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DCMAKE_INSTALL_PREFIX="$PREFIX" -DProtobuf_DIR="$PREFIX/lib/cmake/protobuf"
+cmake --build "$build/protobuf-plugin" --parallel "$jobs"
+cmake --install "$build/protobuf-plugin"
+rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+pinned_rustc=$(rustup which --toolchain "$RUSTUP_TOOLCHAIN" rustc)
+toolchain_bin=$(dirname "$pinned_rustc")
+export RUSTC="$toolchain_bin/rustc" RUSTDOC="$toolchain_bin/rustdoc" CARGO="$toolchain_bin/cargo"
+export PATH="$toolchain_bin:$PATH"
+rustup target add "$target" --toolchain "$RUSTUP_TOOLCHAIN"
+rustup component add rust-docs --toolchain "$RUSTUP_TOOLCHAIN"
+if [[ ! -x "$build/tools/bin/cbindgen" ]]; then
+    cargo install --locked cbindgen --version 0.29.2 --root "$build/tools"
+fi
+export PATH="$build/tools/bin:$PREFIX/bin:$PATH"
+# generate-files builds Rust once, then produces Rust/C++/protobuf/public headers.
+bash tools/generate-files native
+rmdir "$root/build/macos-release/generator-lock"
+trap - EXIT
+ruby tools/windows-exports.rb include/TrustWalletCore "$build/public-api.def"
+cmake -S "$root" -B "$build/core" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_OSX_ARCHITECTURES="$architecture" \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_SKIP_RPATH=ON -DCMAKE_INSTALL_NAME_DIR=@rpath \
+    -DWALLET_CORE_RS_TARGET_DIR="$root/rust/target/$target" \
+    -DBoost_NO_BOOST_CMAKE=ON -DBoost_NO_SYSTEM_PATHS=ON -DBoost_INCLUDE_DIR="$build/boost_1_83_0" \
+    -DTW_UNIT_TESTS=OFF -DTW_BUILD_EXAMPLES=OFF -DTW_ENABLE_CCACHE=OFF \
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-headerpad_max_install_names -Wl,-current_version,$version -Wl,-compatibility_version,4.0.0"
+cmake --build "$build/core" --target TrustWalletCore --parallel "$jobs"
+staging=$(mktemp -d "$build/package-inputs.XXXXXX")
+trap 'rm -rf "$staging"' EXIT
+python3 tools/package-macos-release.py licenses --boost "$build/boost_1_83_0" --output "$staging/licenses"
+python3 tools/package-macos-release.py slice --arch "$architecture" \
+    --library "$build/core/libTrustWalletCore.dylib" --headers include/TrustWalletCore \
+    --licenses "$staging/licenses" --exports "$build/public-api.def" --output "$output" \
+    --version "$version" --source-commit "$(git rev-parse HEAD)" --wasi-source-commit "$WASM_SOURCE_COMMIT"
