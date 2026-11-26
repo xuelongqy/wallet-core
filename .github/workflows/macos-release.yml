@@ -31,7 +31,7 @@ jobs:
         env:
           BUILD_TAG: ${{ github.ref_name }}
           # Exact validated 4.9.3 WASI source; the plain version tag must match.
-          WASM_SOURCE_COMMIT: '6b5741e52d0b61ff0254abf8301f0c0ea77f7083'
+          WASM_SOURCE_COMMIT: '12c1d245e613c367cc6f181e7bde7b3b329f7aff'
         shell: bash
         run: |
           bash tools/shared-release-source macos
